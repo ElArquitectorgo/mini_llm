@@ -1,6 +1,8 @@
 from collections import Counter
 import regex as re
 
+# Save and Load methods are reduced versions of Karpathy's implementation https://github.com/karpathy/minbpe/blob/master/minbpe/base.py
+
 def get_pair_counts(ids: list):
     """
     Return a counter object that contains the frequency of every consecutive pair of elements.
@@ -82,6 +84,17 @@ class Tokenizer:
         self.pattern = r"""'(?i:[sdmt]|ll|ve|re)|[^\r\n\p{L}\p{N}]?+\p{L}+|\p{N}{1,3}| ?[^\s\p{L}\p{N}]++[\r\n]*|\s*[\r\n]|\s+(?!\S)|\s+"""
         self.compiled_pattern = re.compile(self.pattern)
 
+    def build_vocab(self):
+        """
+        Generates a vocab dictionary based on merges.
+
+        """
+        vocab = {idx: bytes([idx]) for idx in range(256)}
+        for pair, idx in self.merges.items():
+            vocab[idx] = vocab[pair[0]] + vocab[pair[1]]
+
+        self.vocab = vocab
+
     def train(self, text: str, vocab_size: int=276):
         """
         Trains the Tokenizer from a text string. Generates a merges dictionary
@@ -95,13 +108,8 @@ class Tokenizer:
         """
         text_chunks = re.findall(self.compiled_pattern, text)
         ids = [list(ch.encode("utf-8")) for ch in text_chunks]
-        merges = byte_pair_encoding(ids, vocab_size)
-        vocab = {idx: bytes([idx]) for idx in range(256)}
-        for pair, idx in merges.items():
-            vocab[idx] = vocab[pair[0]] + vocab[pair[1]]
-
-        self.merges = merges
-        self.vocab = vocab
+        self.merges = byte_pair_encoding(ids, vocab_size)
+        self.build_vocab()
 
     def encode_chunk(self, text: str):
         """
@@ -147,3 +155,37 @@ class Tokenizer:
         tokens = b"".join(self.vocab[idx] for idx in ids)
         text = tokens.decode("utf-8", errors="replace")
         return text
+    
+    def save(self, file_prefix: str):
+        """
+        Saves file_prefix.model. Writes version, pattern and merges.
+
+        :param file_prefix: Name of the file.
+        :type file_prefix: str
+        """
+        model_file = file_prefix + ".model"
+        with open(model_file, 'w') as f:
+            f.write("shake v1\n")
+            f.write(f"{self.pattern}\n")
+            for idx1, idx2 in self.merges:
+                f.write(f"{idx1} {idx2}\n")
+
+    def load(self, model_file: str):
+        """
+        Reads a model_file (.model) to get merges from a training set.
+        
+        :param model_file: Name of the model (must include file extension).
+        :type model_file: str
+        """
+        merges = {}
+        idx = 256
+        with open(model_file, 'r', encoding="utf-8") as f:
+            version = f.readline().strip()
+            self.pattern = f.readline().strip()
+            # read the merges
+            for line in f:
+                idx1, idx2 = map(int, line.split())
+                merges[(idx1, idx2)] = idx
+                idx += 1
+        self.merges = merges
+        self.build_vocab()
