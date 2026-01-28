@@ -3,8 +3,10 @@ import requests
 from tokenizer import Tokenizer
 import numpy as np
 
+# https://www.gutenberg.org/ebooks/author/505
+
 p = Path(".")
-file = p / "input.txt"
+file = p / "cervantes.txt" # El Quijote + Novelas ejemplares
 
 if not file.exists():
     data_url = 'https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt'
@@ -19,7 +21,9 @@ train_data = data[:int(n*0.9)]
 val_data = data[int(n*0.9):]
 
 t = Tokenizer()
-t.load("tiny_shake.model")
+#t.train(data, 1024)
+#t.save("cervantes") # training tokens: 1_441_293 validation tokens: 161_073
+#t.load("cervantes.model")
 train_ids = t.encode(train_data)
 val_ids = t.encode(val_data)
 
