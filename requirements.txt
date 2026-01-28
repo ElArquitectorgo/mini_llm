@@ -1,2 +1,4 @@
 pytest==9.0.2
 regex==2026.1.15
+torch==2.9.1
+numpy==2.1.3

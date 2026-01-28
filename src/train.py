@@ -1,11 +1,10 @@
+from model import Language_model
 from tokenizer import Tokenizer
 import torch
-import torch.nn as nn
 import numpy as np
-from torch.nn import functional as F
 
 batch_size = 16 # number of sequences to train in parallel
-block_size = 1024 # context length, how many words the model will see in each batch
+block_size = 512 # context length, how many words the model will see in each batch
 max_iters = 20_000
 eval_interval = 2_000
 eval_iters = 200
@@ -14,7 +13,7 @@ n_embedding = 512
 n_head = 8
 n_layer = 8
 dropout = 0.1
-vocab_size = 1024
+vocab_size = 512
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 torch.manual_seed(42)
@@ -35,7 +34,7 @@ def get_batch(split: str):
     :param split: A string to get the data from train or val.
     :type split: str
     """
-    data = np.memmap(split + '.bin', dtype=np.uint16, mode='r')
+    data = np.memmap(split + '_cervantes512.bin', dtype=np.uint16, mode='r')
     # now we generate "batch_size" random numbers between 0 and
     # len(data) - context_length to avoid index out of bounds.
     # Example: b_s=4 -> tensor([492919, 784932, 451282, 403882])
@@ -58,112 +57,9 @@ def estimate_loss():
         out[split] = losses.mean()
     model.train()
     return out
-
-class Head(nn.Module):
-    def __init__(self, head_size):
-        super().__init__()
-        self.key = nn.Linear(n_embedding, head_size, bias=False)
-        self.query = nn.Linear(n_embedding, head_size, bias=False)
-        self.value = nn.Linear(n_embedding, head_size, bias=False)
-        self.register_buffer("tril", torch.tril(torch.ones(block_size, block_size)))
-        self.dropout = nn.Dropout(dropout)
-
-    def forward(self, x):
-        B, T, C = x.shape
-        k = self.key(x) # (B, T, C)
-        q = self.query(x) # (B, T, C)
-
-        attention = q @ k.transpose(-2, -1) * C ** -0.5 # (B, T, T)
-        attention = attention.masked_fill(self.tril[:T, :T] == 0, float("-inf")) # (B, T, T)
-        attention = F.softmax(attention, dim=-1) # (B, T, T)
-        attention = self.dropout(attention)
-
-        v = self.value(x) # (B, T, C)
-        out = attention @ v # (B, T, C)
-        return out
     
-class MultiHeadAttention(nn.Module):
-    def __init__(self, num_heads, head_size):
-        super().__init__()
-        self.heads = nn.ModuleList([Head(head_size) for _ in range(num_heads)])
-        self.projection = nn.Linear(n_embedding, n_embedding)
-        self.dropout = nn.Dropout(dropout)
-
-    def forward(self, x):
-        out = torch.cat([h(x) for h in self.heads], dim=-1)
-        out = self.projection(self.dropout(out))
-        return out
-
-class FeedForward(nn.Module):
-    def __init__(self, n_embedding):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(n_embedding, 4 * n_embedding),
-            nn.ReLU(),
-            nn.Linear(4 * n_embedding, n_embedding),
-            nn.Dropout(dropout),
-        )
-
-    def forward(self, x):
-        return self.net(x)
-    
-class Block(nn.Module):
-    def __init__(self, n_embedding, n_head):
-        super().__init__()
-        head_size = n_embedding // n_head
-        self.sa = MultiHeadAttention(n_head, head_size)
-        self.ffwd = FeedForward(n_embedding)
-        self.layer_norm_1 = nn.LayerNorm(n_embedding) 
-        self.layer_norm_2 = nn.LayerNorm(n_embedding) 
-
-    def forward(self, x):
-        x = x + self.sa(self.layer_norm_1(x))
-        x = x + self.ffwd(self.layer_norm_2(x))
-        return x
-
-class Language_model(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.token_embedding_table = nn.Embedding(vocab_size, n_embedding)
-        self.position_embedding_table = nn.Embedding(block_size, n_embedding)
-        self.blocks = nn.Sequential(*[Block(n_embedding, n_head) for _ in range(n_layer)])
-        self.final_layer_norm = nn.LayerNorm(n_embedding)
-        self.lm_head = nn.Linear(n_embedding, vocab_size)
-
-    def forward(self, idx, targets=None):
-        B, T = idx.shape
-        token_embeddings = self.token_embedding_table(idx) # (B, T, C) batch, block, n_embedding
-        position_embeddings = self.position_embedding_table(torch.arange(T, device=device)) # (T, C)
-        x = token_embeddings + position_embeddings # (B, T, C)
-        x = self.blocks(x) # (B, T, C)
-        x = self.final_layer_norm(x) # (B, T, C)
-        logits = self.lm_head(x) # (B, T, vocab_size)
-
-        if targets is None:
-            loss = None
-        else:
-            B,T,C = logits.shape
-            logits = logits.view(B*T, C)
-            targets = targets.view(B*T)
-            loss = F.cross_entropy(logits, targets)
-
-        return logits, loss
-    
-    def generate(self, idx, max_new_tokens):
-        for _ in range(max_new_tokens):
-            idx_cond = idx[:, -block_size:]
-            logits, loss = self(idx_cond)
-            logits = logits[:, -1, :] # (B, C)
-            probs = F.softmax(logits, dim=-1) # (B, C)
-            idx_next = torch.multinomial(probs, num_samples=1) # (B, 1)
-            idx = torch.cat((idx, idx_next), dim=1) # (B, T+1)
-        return idx
-    
-model = Language_model()
+model = Language_model(block_size, vocab_size, n_embedding, dropout, n_layer, n_head, device)
 model = model.to(device)
-t = Tokenizer()
-t.load("cervantes.model")
-
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 
 for iter in range(max_iters):
@@ -178,4 +74,6 @@ for iter in range(max_iters):
     optimizer.step()
 
 context = torch.zeros((1, 1), dtype=torch.long, device=device)
+t = Tokenizer()
+t.load("tokenizer_models/cervantes512.model")
 open("more.txt", "w").write(t.decode(model.generate(context, max_new_tokens=10000)[0].tolist()))
