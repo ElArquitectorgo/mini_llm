@@ -46,6 +46,22 @@ Features:
 
 ## 🚀 Training the Model
 
+First we need to train out tokenizer:
+
+```bash
+cd src
+python dataset.py --train True --train_dataset datasets/cervantes.txt --vocab_size 256 --encode_dataset datasets/cervantes.txt
+```
+
+The program will automatically detect the tokenizer model generated during training. If you want to specify a model, you can run:
+
+```bash
+cd src
+python dataset.py -encode_dataset datasets/cervantes.txt -m tokenizer_models/cervantes256.model
+```
+
+> Note that the training dataset and the dataset you want to encode for training can be different.
+
 To train the language model:
 
 ```bash
