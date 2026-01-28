@@ -7,7 +7,9 @@ import os
 # https://www.gutenberg.org/ebooks/author/505
 
 # El Quijote + Novelas ejemplares
-#t.train(data, 1024) training tokens: 1_441_293 validation tokens: 161_073
+# vocab 1024 training tokens: 1_441_293 validation tokens: 161_073
+# vocab 512 training tokens: 1_748_441 validation tokens: 195_644
+# vocab 256 training tokens: 2_876_537 validation tokens: 319_549
 
 def train_tokenizer(dataset: Path, vocab_size: int):
     """
@@ -52,8 +54,8 @@ def dataset_to_numpy(dataset: Path, tokenizer_model: Path, train_split: float=0.
 
     train_ids = np.array(train_ids, dtype=np.uint16)
     val_ids = np.array(val_ids, dtype=np.uint16)
-    train_ids.tofile("train" + tokenizer_model.stem + ".bin")
-    val_ids.tofile("val" + tokenizer_model.stem + ".bin")
+    train_ids.tofile("train_" + tokenizer_model.stem + ".bin")
+    val_ids.tofile("val_" + tokenizer_model.stem + ".bin")
 
 def main():
     parser = argparse.ArgumentParser()
