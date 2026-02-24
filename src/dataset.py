@@ -6,10 +6,10 @@ import os
 
 # https://www.gutenberg.org/ebooks/author/505
 
-# El Quijote + Novelas ejemplares
-# vocab 1024 training tokens: 1_441_293 validation tokens: 161_073
-# vocab 512 training tokens: 1_748_441 validation tokens: 195_644
-# vocab 256 training tokens: 2_876_537 validation tokens: 319_549
+# El Quijote + Novelas ejemplares + Los entremeses
+# vocab 1024 training tokens: 1_544_213 validation tokens: 178_843
+# vocab 512 training tokens: 1_890_559 validation tokens: 216_881
+# vocab 256 training tokens: 3_079_424 validation tokens: 342_257
 
 def train_tokenizer(dataset: Path, vocab_size: int):
     """

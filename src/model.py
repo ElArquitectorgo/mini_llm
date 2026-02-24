@@ -42,7 +42,7 @@ class FeedForward(nn.Module):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(n_embedding, 4 * n_embedding),
-            nn.ReLU(),
+            nn.GELU(),
             nn.Linear(4 * n_embedding, n_embedding),
             nn.Dropout(dropout),
         )
@@ -54,7 +54,7 @@ class Block(nn.Module):
     def __init__(self, n_embedding, n_head, block_size, dropout):
         super().__init__()
         head_size = n_embedding // n_head
-        self.sa = MultiHeadAttention(n_head, head_size, n_embedding, block_size, dropout)
+        self.sa = MultiHeadAttention(n_head, head_size, block_size, n_embedding, dropout)
         self.ffwd = FeedForward(n_embedding, dropout)
         self.layer_norm_1 = nn.LayerNorm(n_embedding) 
         self.layer_norm_2 = nn.LayerNorm(n_embedding) 
@@ -103,7 +103,7 @@ class Language_model(nn.Module):
     def generate(self, idx, max_new_tokens):
         for _ in range(max_new_tokens):
             idx_cond = idx[:, -self.block_size:]
-            logits, loss = self(idx_cond)
+            logits, _ = self(idx_cond)
             logits = logits[:, -1, :] # (B, C)
             probs = F.softmax(logits, dim=-1) # (B, C)
             idx_next = torch.multinomial(probs, num_samples=1) # (B, 1)

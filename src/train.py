@@ -3,17 +3,18 @@ from tokenizer import Tokenizer
 import torch
 import numpy as np
 
-batch_size = 16 # number of sequences to train in parallel
+batch_size = 32 # number of sequences to train in parallel
 block_size = 512 # context length, how many words the model will see in each batch
-max_iters = 20_000
+max_iters = 8_000
 eval_interval = 2_000
 eval_iters = 200
-learning_rate = 6e-4
-n_embedding = 512
+learning_rate = 3e-4
+n_embedding = 256
 n_head = 8
 n_layer = 8
-dropout = 0.1
-vocab_size = 512
+dropout = 0.2
+vocab_size = 256
+source = "cervantes256"
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 torch.manual_seed(42)
@@ -24,17 +25,13 @@ def get_batch(split: str):
     of 'y' corresponds to the second element of 'x', meaning that the
     model, given a token x[i], should predict token x[i+1].
 
-    x = [[117, 114,  32, 259, 273,  59,  10,  66],
-         [ 10,  65,  78,  71,  69,  76,  79,  58],
-                                            ...]],
-    y = [[114,  32, 259, 273,  59,  10,  66, 117],
-         [ 65,  78,  71,  69,  76,  79,  58,  10],
-                                            ...]]
+    x = [[117, 114,  32, 259, 273,  59,  10,  66], ...]],
+    y = [[114,  32, 259, 273,  59,  10,  66, 117], ...]]
     
     :param split: A string to get the data from train or val.
     :type split: str
     """
-    data = np.memmap(split + '_cervantes512.bin', dtype=np.uint16, mode='r')
+    data = np.memmap(split + f'_{source}.bin', dtype=np.uint16, mode='r')
     # now we generate "batch_size" random numbers between 0 and
     # len(data) - context_length to avoid index out of bounds.
     # Example: b_s=4 -> tensor([492919, 784932, 451282, 403882])
@@ -52,7 +49,7 @@ def estimate_loss():
         losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
             X, Y = get_batch(split)
-            logits, loss = model(X, Y)
+            _, loss = model(X, Y)
             losses[k] = loss.item()
         out[split] = losses.mean()
     model.train()
@@ -75,5 +72,5 @@ for iter in range(max_iters):
 
 context = torch.zeros((1, 1), dtype=torch.long, device=device)
 t = Tokenizer()
-t.load("tokenizer_models/cervantes512.model")
+t.load(f"tokenizer_models/{source}.model")
 open("more.txt", "w").write(t.decode(model.generate(context, max_new_tokens=10000)[0].tolist()))
